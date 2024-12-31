@@ -1,49 +1,65 @@
+import 'package:chat_manager/lib.dart';
 
-import 'package:chat_manager/chat_list_manager.dart';
-import 'package:chat_manager/chat_thread.dart';
+// lib/main.dart
+void main() async {
+  // Initialize components
+  final server = MockServer();
+  final database = MockDatabase();
+  final repository = ChatRepository();
 
-void main() {
-  final manager = ChatListManager();
+  final bloc = ChatBloc(
+    server: server,
+    database: database,
+    repository: repository,
+  );
 
-  // Load sample data
-  final sampleData = [
-    {
-      "id": 1,
-      "predecessorId": null,
-      "successorId": 2,
-      "lastMessageAt": "2024-01-01T10:00:00Z",
-      "lastMessageText": "Hello",
-      "isPinned": false
-    },
-    {
-      "id": 2,
-      "predecessorId": 1,
-      "successorId": null,
-      "lastMessageAt": "2024-01-01T09:00:00Z",
-      "lastMessageText": "Hi there",
-      "isPinned": false
+  // Start mock real-time updates
+  server.startMockUpdates();
+
+  // Print formatted updates
+  bloc.stream.listen((state) {
+    print('\n${DateTime.now()} - Current State: ${state.runtimeType}');
+
+    if (state is ChatsLoaded) {
+      print('\nChats:');
+      for (final chat in state.chats) {
+        print('  Chat ${chat.metadata.id}: ${chat.lastMessage?.content}');
+      }
     }
-  ];
 
-  manager.loadFromJson(sampleData);
+    if (state is MessagesLoaded) {
+      print('\nChats:');
+      for (final chat in state.chats) {
+        print('  Chat ${chat.metadata.id}: ${chat.lastMessage?.content}');
+      }
 
-  // Print initial order
-  print('Initial order:');
-  print(manager.getOrderedChatList());
+      print('\nMessages:');
+      state.messages.forEach((chatId, messages) {
+        print('  Chat $chatId:');
+        for (final message in messages) {
+          print('    ${message.content}');
+        }
+      });
+    }
+  });
 
-  // Add new message to chat 2
-  manager.handleNewMessage(2, 'New message in chat 2');
+  // Load initial data
+  bloc.add(LoadChats());
 
-  // Print new order
-  print('\nOrder after new message:');
-  print(manager.getOrderedChatList());
+  // Simulate user loading messages for chat 1
+  await Future.delayed(Duration(seconds: 2));
+  bloc.add(LoadMessages(1));
 
-  // Add new chat
-  final newChat = ChatThread(
-      id: 3, lastMessageAt: DateTime.now(), lastMessageText: 'Brand new chat');
-  manager.addNewChat(newChat);
+  // Simulate user sending a message
+  await Future.delayed(Duration(seconds: 3));
+  bloc.add(SendMessage(1, 'Hello from user!'));
 
-  // Print final order
-  print('\nOrder after adding new chat:');
-  print(manager.getOrderedChatList());
+  // Keep the program running
+  await Future.delayed(Duration(seconds: 30));
+
+  // Cleanup
+  bloc.close();
+  server.dispose();
+  database.dispose();
+  repository.dispose();
 }
